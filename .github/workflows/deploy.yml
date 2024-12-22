@@ -73,6 +73,7 @@ jobs:
         # Update the ECS service to use the new task definition
         aws ecs update-service \
           --cluster ${{ secrets.ECS_CLUSTER }} \
-          --service-name ${{ secrets.ECS_SERVICE_NAME }} \
+          --service ${{ secrets.ECS_SERVICE_NAME }} \
           --task-definition $(jq -r '.family + ":" + (.revision | tostring)' cleaned_task_definition.json) \
           --desired-count 1
+
