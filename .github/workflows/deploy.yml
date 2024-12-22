@@ -1,14 +1,11 @@
 name: Deploy to Amazon ECS
-
 on:
   push:
     branches:
       - main
-
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
     - name: Check out code
       uses: actions/checkout@v3
@@ -56,20 +53,20 @@ jobs:
 
     - name: Update ECS task definition with new image
       run: |
-        # Update the task definition JSON with the new image tag
-        jq '.taskDefinition.containerDefinitions[0].image = "${{ secrets.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}"' \
-          current_task_definition.json > updated_task_definition.json
-        # Remove unnecessary fields to match the ECS expected input format
-        jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .registeredBy, .registeredAt, .compatibilities)' \
-          updated_task_definition.json > cleaned_task_definition.json
+        # Extraer el JSON de la definición de tarea, eliminando la clave raíz 'taskDefinition'
+        jq '.taskDefinition' current_task_definition.json > task_def_base.json
+        
+        # Actualizar la imagen y limpiar campos innecesarios
+        jq --arg IMAGE "${{ secrets.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}" '
+          .containerDefinitions[0].image = $IMAGE |
+          del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .registeredBy, .registeredAt, .compatibilities)
+        ' task_def_base.json > cleaned_task_definition.json
 
     - name: Register new ECS task definition
       run: |
-        # Register the updated ECS task definition with necessary parameters
+        # Registrar la definición de tarea actualizada
         RESPONSE=$(aws ecs register-task-definition --cli-input-json file://cleaned_task_definition.json)
-        # Extract the task definition ARN from the response
         TASK_DEFINITION_ARN=$(echo "$RESPONSE" | jq -r '.taskDefinition.taskDefinitionArn')
-        # Save the ARN to the environment variables for use in service update
         echo "TASK_DEFINITION_ARN=$TASK_DEFINITION_ARN" >> $GITHUB_ENV
 
     - name: Deploy to ECS
