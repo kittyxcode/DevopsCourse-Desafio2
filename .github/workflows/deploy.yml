@@ -53,8 +53,6 @@ jobs:
         aws ecs describe-task-definition \
           --task-definition ${{ secrets.ECS_TASK_FAMILY }} \
           > current_task_definition.json
-        # Output the downloaded task definition for debugging
-        cat current_task_definition.json
 
     - name: Update ECS task definition with new image
       run: |
@@ -64,21 +62,25 @@ jobs:
         # Remove unnecessary fields to match the ECS expected input
         jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .registeredBy, .registeredAt, .compatibilities)' \
           updated_task_definition.json > cleaned_task_definition.json
-        # Output the cleaned task definition for debugging
-        cat cleaned_task_definition.json
 
     - name: Register new ECS task definition
+      id: register_task
       run: |
         # Register the updated ECS task definition
-        aws ecs register-task-definition --cli-input-json file://cleaned_task_definition.json
+        REVISION=$(aws ecs register-task-definition --cli-input-json file://cleaned_task_definition.json | jq -r '.taskDefinition.taskDefinitionArn')
+        echo "REVISION=$REVISION" >> $GITHUB_ENV
       env:
         DEBUG: true # Activa más información de registro
 
+    - name: Debug registered task revision
+      run: echo "Registered task definition revision: ${{ env.REVISION }}"
+
     - name: Deploy to ECS
       run: |
-        # Update the ECS service to use the new task definition
+        # Extract family and revision for the task definition
+        FAMILY=$(jq -r '.family' cleaned_task_definition.json)
         aws ecs update-service \
           --cluster ${{ secrets.ECS_CLUSTER }} \
-          --service ${{ secrets.ECS_SERVICE_NAME }} \
-          --task-definition ${{ secrets.ECS_TASK_FAMILY }}:${{ env.REVISION }} \
+          --service-name ${{ secrets.ECS_SERVICE_NAME }} \
+          --task-definition "$FAMILY:${{ env.REVISION }}" \
           --desired-count 1
