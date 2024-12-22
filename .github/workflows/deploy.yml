@@ -56,31 +56,24 @@ jobs:
 
     - name: Update ECS task definition with new image
       run: |
-        # Extract only the task definition block
-        jq '.taskDefinition | .containerDefinitions[0].image = "${{ secrets.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}"' \
+        # Update the ECS task definition to include the new image tag
+        jq '.taskDefinition.containerDefinitions[0].image = "${{ secrets.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}"' \
           current_task_definition.json > updated_task_definition.json
-        # Remove unnecessary fields to match the ECS expected input
-        jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .registeredBy, .registeredAt, .compatibilities)' \
-          updated_task_definition.json > cleaned_task_definition.json
 
     - name: Register new ECS task definition
-      id: register_task
       run: |
-        # Register the updated ECS task definition
-        REVISION=$(aws ecs register-task-definition --cli-input-json file://cleaned_task_definition.json | jq -r '.taskDefinition.taskDefinitionArn')
-        echo "REVISION=$REVISION" >> $GITHUB_ENV
-      env:
-        DEBUG: true # Activa más información de registro
-
-    - name: Debug registered task revision
-      run: echo "Registered task definition revision: ${{ env.REVISION }}"
+        # Register the updated ECS task definition and capture the response
+        RESPONSE=$(aws ecs register-task-definition --cli-input-json file://updated_task_definition.json)
+        # Extract the task definition ARN from the response
+        TASK_DEFINITION_ARN=$(echo "$RESPONSE" | jq -r '.taskDefinition.taskDefinitionArn')
+        # Save the ARN to the environment variables
+        echo "TASK_DEFINITION_ARN=$TASK_DEFINITION_ARN" >> $GITHUB_ENV
 
     - name: Deploy to ECS
       run: |
-        # Extract family and revision for the task definition
-        FAMILY=$(jq -r '.family' cleaned_task_definition.json)
+        # Update the ECS service to use the new task definition
         aws ecs update-service \
           --cluster ${{ secrets.ECS_CLUSTER }} \
-          --service-name ${{ secrets.ECS_SERVICE_NAME }} \
-          --task-definition "$FAMILY:${{ env.REVISION }}" \
+          --service ${{ secrets.ECS_SERVICE_NAME }} \
+          --task-definition ${{ env.TASK_DEFINITION_ARN }} \
           --desired-count 1
