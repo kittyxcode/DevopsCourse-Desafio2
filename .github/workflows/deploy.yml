@@ -47,14 +47,23 @@ jobs:
         # Push the Docker image to ECR with the generated tag
         docker push ${{ secrets.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
 
+    - name: Retrieve current ECS task definition
+      run: |
+        # Download the current ECS task definition
+        aws ecs describe-task-definition \
+          --task-definition ${{ secrets.ECS_TASK_FAMILY }} \
+          > current_task_definition.json
+
     - name: Update ECS task definition with new image
       run: |
         # Update the ECS task definition JSON with the new image tag
-        jq '.containerDefinitions[0].image = "${{ secrets.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}"' task_definition.json > updated_task_definition.json
+        jq --arg IMAGE "${{ secrets.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}" \
+          '.taskDefinition.containerDefinitions[0].image = $IMAGE' \
+          current_task_definition.json > updated_task_definition.json
 
     - name: Register new ECS task definition
       run: |
-        # Register the new ECS task definition
+        # Register the updated ECS task definition
         aws ecs register-task-definition --cli-input-json file://updated_task_definition.json
 
     - name: Deploy to ECS
@@ -63,5 +72,6 @@ jobs:
         aws ecs update-service \
           --cluster ${{ secrets.ECS_CLUSTER }} \
           --service-name ${{ secrets.ECS_SERVICE_NAME }} \
-          --task-definition $(jq -r '.family' updated_task_definition.json) \
+          --task-definition $(jq -r '.family + ":" + (.revision | tostring)' updated_task_definition.json) \
           --desired-count 1
+
