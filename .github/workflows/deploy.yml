@@ -34,9 +34,10 @@ jobs:
         run: |
           docker push ${{ secrets.ECR_REPOSITORY }}:$GITHUB_SHA
 
-      - name: Deploy to ECS
+      - name: Deploy to ECS using AWS CLI
         run: |
-          ecs-deploy \
-          --cluster ${{ secrets.ECS_CLUSTER }} \
-          --service-name ${{ secrets.ECS_SERVICE_NAME }} \
-          --image ${{ secrets.ECR_REPOSITORY }}:$GITHUB_SHA
+          aws ecs update-service \
+            --cluster ${{ secrets.ECS_CLUSTER }} \
+            --service ${{ secrets.ECS_SERVICE_NAME }} \
+            --force-new-deployment \
+            --image ${{ secrets.ECR_REPOSITORY }}:$GITHUB_SHA
