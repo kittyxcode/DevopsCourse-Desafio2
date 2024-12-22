@@ -56,13 +56,13 @@ jobs:
 
     - name: Update ECS task definition with new image
       run: |
-        # Update the ECS task definition to include the new image tag
+        # Extract the current task definition to update the image
         jq '.taskDefinition.containerDefinitions[0].image = "${{ secrets.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}"' \
           current_task_definition.json > updated_task_definition.json
 
     - name: Register new ECS task definition
       run: |
-        # Register the updated ECS task definition and capture the response
+        # Register the updated ECS task definition with necessary parameters
         RESPONSE=$(aws ecs register-task-definition --cli-input-json file://updated_task_definition.json)
         # Extract the task definition ARN from the response
         TASK_DEFINITION_ARN=$(echo "$RESPONSE" | jq -r '.taskDefinition.taskDefinitionArn')
