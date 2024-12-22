@@ -66,7 +66,12 @@ jobs:
     - name: Register new ECS task definition
       run: |
         # Register the updated ECS task definition
-        aws ecs register-task-definition --cli-input-json file://cleaned_task_definition.json
+        aws ecs register-task-definition --cli-input-json file://cleaned_task_definition.json > register_output.json
+        # Extract task family and revision for the deployment step
+        TASK_FAMILY=$(jq -r '.family' register_output.json)
+        REVISION=$(jq -r '.taskDefinitionArn' register_output.json | grep -oE '[0-9]+$')
+        echo "TASK_FAMILY=$TASK_FAMILY" >> $GITHUB_ENV
+        echo "REVISION=$REVISION" >> $GITHUB_ENV
 
     - name: Deploy to ECS
       run: |
@@ -74,6 +79,6 @@ jobs:
         aws ecs update-service \
           --cluster ${{ secrets.ECS_CLUSTER }} \
           --service ${{ secrets.ECS_SERVICE_NAME }} \
-          --task-definition $(jq -r '.family + ":" + (.revision | tostring)' cleaned_task_definition.json) \
+          --task-definition ${{ env.TASK_FAMILY }}:${{ env.REVISION }} \
           --desired-count 1
 
