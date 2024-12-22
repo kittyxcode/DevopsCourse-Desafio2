@@ -56,15 +56,17 @@ jobs:
 
     - name: Update ECS task definition with new image
       run: |
-        # Update the ECS task definition JSON with the new image tag
-        jq --arg IMAGE "${{ secrets.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}" \
-          '.taskDefinition.containerDefinitions[0].image = $IMAGE' \
+        # Extract only the task definition block
+        jq '.taskDefinition | .containerDefinitions[0].image = "${{ secrets.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}"' \
           current_task_definition.json > updated_task_definition.json
+        # Remove unnecessary fields to match the ECS expected input
+        jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .registeredBy, .registeredAt)' \
+          updated_task_definition.json > cleaned_task_definition.json
 
     - name: Register new ECS task definition
       run: |
         # Register the updated ECS task definition
-        aws ecs register-task-definition --cli-input-json file://updated_task_definition.json
+        aws ecs register-task-definition --cli-input-json file://cleaned_task_definition.json
 
     - name: Deploy to ECS
       run: |
@@ -72,6 +74,5 @@ jobs:
         aws ecs update-service \
           --cluster ${{ secrets.ECS_CLUSTER }} \
           --service-name ${{ secrets.ECS_SERVICE_NAME }} \
-          --task-definition $(jq -r '.family + ":" + (.revision | tostring)' updated_task_definition.json) \
+          --task-definition $(jq -r '.family + ":" + (.revision | tostring)' cleaned_task_definition.json) \
           --desired-count 1
-
