@@ -60,7 +60,7 @@ jobs:
         jq '.taskDefinition | .containerDefinitions[0].image = "${{ secrets.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}"' \
           current_task_definition.json > updated_task_definition.json
         # Remove unnecessary fields to match the ECS expected input
-        jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .registeredBy, .registeredAt)' \
+        jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .registeredBy, .registeredAt, .compatibilities)' \
           updated_task_definition.json > cleaned_task_definition.json
 
     - name: Register new ECS task definition
